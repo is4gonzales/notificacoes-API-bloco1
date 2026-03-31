@@ -1,60 +1,75 @@
-class InscricaoController {
-  constructor() {
-    this.inscricoes = [];
-    this.idAtual = 1;
-  }
+const InscricaoModel = require("../models/InscricaoModel");
 
-  store(req, res) {
+const { isRequired, validar } = require("../helpers/validators");
+
+const { ValidationError } = require("../errors/AppError");
+
+/**
+ * Criar inscrição (COM VALIDAÇÃO)
+ */
+function store(req, res, next) {
+  try {
     const { eventoId, participanteId } = req.body;
 
-    if (!eventoId || !participanteId) {
-      return res.status(400).json({
-        erro: "eventoId e participanteId são obrigatórios",
-      });
+    const erros = validar([
+      isRequired(eventoId, "Evento ID"),
+      isRequired(participanteId, "Participante ID"),
+    ]);
+
+    if (erros) {
+      throw new ValidationError(erros.join("; "));
     }
 
-    const novaInscricao = {
-      id: this.idAtual++,
-      eventoId,
-      participanteId,
-      dataInscricao: new Date(),
-      status: "confirmada",
-    };
-
-    this.inscricoes.push(novaInscricao);
-
-    res.status(201).json(novaInscricao);
-  }
-
-  index(req, res) {
-    res.json(this.inscricoes);
-  }
-
-  showByEvento(req, res) {
-    const { eventoId } = req.params;
-
-    const resultado = this.inscricoes.filter(
-      (i) => i.eventoId == eventoId
+    const resultado = InscricaoModel.criar(
+      parseInt(eventoId),
+      parseInt(participanteId)
     );
 
-    res.json(resultado);
-  }
-
-  cancelar(req, res) {
-    const { id } = req.params;
-
-    const inscricao = this.inscricoes.find((i) => i.id == id);
-
-    if (!inscricao) {
-      return res.status(404).json({
-        erro: "Inscrição não encontrada",
-      });
-    }
-
-    inscricao.status = "cancelada";
-
-    res.json(inscricao);
+    res.status(201).json(resultado);
+  } catch (erro) {
+    next(erro);
   }
 }
 
-module.exports = new InscricaoController();
+/**
+ * Listar inscrições
+ */
+function index(req, res, next) {
+  try {
+    const inscricoes = InscricaoModel.listar();
+    res.json(inscricoes);
+  } catch (erro) {
+    next(erro);
+  }
+}
+
+/**
+ * Deletar inscrição
+ */
+function destroy(req, res, next) {
+  try {
+    const id = parseInt(req.params.id);
+
+    const removido = InscricaoModel.deletar(id);
+
+    if (!removido) {
+      return res.status(404).json({
+        erro: {
+          tipo: "NotFoundError",
+          mensagem: "Inscrição não encontrada",
+          statusCode: 404,
+        },
+      });
+    }
+
+    res.status(204).send();
+  } catch (erro) {
+    next(erro);
+  }
+}
+
+module.exports = {
+  index,
+  store,
+  destroy,
+};
